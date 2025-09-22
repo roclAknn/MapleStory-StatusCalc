@@ -396,6 +396,7 @@ body.dragging {
 
 .input-item-container.dragging{
     transform: scale(95%);
+    background: #ffe;
 }
 
 .input-item-handle {
