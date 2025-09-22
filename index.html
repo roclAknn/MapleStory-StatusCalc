@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>/MapleStory/ ステータス効率計算器</title>
+    <link rel="stylesheet" type="text/css" href="main.css" />
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">/MapleStory/ ステータス効率計算器</h1>
+        <div id="top-container">
+            <div id="basic-setting">
+                <div id="basic-setting-header">
+                    <div class="dropdown-container" id="preset-dropdown-container">
+                        <button class="dropdown-button" id="preset-dropdown-button" onclick="onDropdownButtonClick.apply(this)">プリセットA</button>
+                        <div class="dropdown-menu" id="preset-dropdown-menu"></div>
+                    </div>
+                    
+                    <div class="dropdown-container" id="hamberger-dropdown-container">
+                        <button class="hamburger" id="hamburger" onclick="onDropdownButtonClick.apply(this)">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </button>
+                        <div class="dropdown-menu" id="hamberger-dropdown-menu">
+                            <div class="hamberger-item" onclick="openFileModal();">
+                                バックアップ
+                            </div>
+                            <div class="hamberger-item" onclick="openHyperModal();">
+                                ハイパーステータス
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="joblist-container">
+                    <div id="joblist-text">職業タイプ選択</div>
+                    <select id="joblist-select" onchange="changeJob(this.selectedIndex);"></select>
+                </div>
+                <div id="enemydef-container">
+                    <div id="enemydef-text">敵防御率</div>
+                    <input type="number" class="input-value" id="enemydef-input" value="380" maxlength=30 onchange="updateEnemyDef(this.value);" oninput="this.onchange();">
+                    <div id="enemydef-unit">%</div>
+                </div>
+            </div>
+            <div id="power-coefficient-container">
+                <div id="power-coefficient-text">火力係数</div>
+                 <div id="power-coefficient-value">0</div>
+            </div>
+        </div>
+        <div id="status-container">
+            <div id="status-order1" class="status-order"></div>
+            <div id="status-order2" class="status-order"></div>
+        </div>
+    </div>
+    
+    <div class="overlay" id="overlay" onclick="closeModal()">
+        <div class="modal" id="file-modal" onclick="event.stopPropagation()">
+            <h2>バックアップ</h2>
+            <p style="color: #666; margin-bottom: 25px;">
+                自動保存データは消える可能性があるためこちらを併用してください。
+            </p>
+            
+            <div class="file-buttons">
+                <button class="file-button save-button" onclick="saveJSON()">
+                    作成
+                </button>
+                <button class="file-button load-button" onclick="loadJSON()">
+                    読み込み
+                </button>
+                <input type="file" id="fileInput" style="display: none;" accept=".json" onchange="handleFileLoad(event)">
+            </div>
+            
+            <button class="file-button close-button" onclick="closeModal()">
+                閉じる
+            </button>
+            <div id="file-statusmessage"></div>
+        </div>
+        <div class="modal" id="hyper-modal" onclick="event.stopPropagation()">
+            <h2>ハイパーステータス最適化</h2>
+            <p style="color: #666; margin-bottom: 25px;">
+                ハイパーステータス上昇分のステータスを<br>0・無効・減算してから使用してください
+            </p>
+            <div id="hyper-calcpoint-container" class="hyper-container">
+                <div class="hyper-label">レベル</div>
+                <input type="number" class="hyper-input" id="hyper-lv" value="280" max="300"
+                            onchange="updateCalcHyperPoint()" oninput="this.onchange()">
+                <div class="hyper-label">減算pt</div>
+                <input type="number" class="hyper-input" id="hyper-decrease" value="0"
+                            onchange="updateCalcHyperPoint()" oninput="this.onchange()">
+            </div>
+            <div id="hyper-decrease-container" class="hyper-container">
+            </div>
+            <div id="hyper-point-container" class="hyper-container">
+                <div class="hyper-label">所持pt</div>
+                <input type="number" class="hyper-input" id="hyper-point" value="0"
+                            onchange="updateHyperPoint(this.value)" oninput="this.onchange()">
+                <button id="hyper-calc-button" class="hyper-button" onclick="outputHyperList()">出力</button>
+            </div>
+            <div id="hyper-result-container">
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const data = {};
+        let inputId = 0; // ステータス入力項目のID
+        let preset; // 選択中プリセット
+        
+        let flagConfirmRemoveInput = true; // input-item項目削除時の確認フラグ
+        
+        let storeTimer = -1; // LocalStorage保存ディレイのタイマーID
+        
+        // カンナの補正　暫定値
+        let 平均段数 = 4; // 五行段数 [平均段数]+1倍適用
+        let 華扇 = 31; // 華扇二重 MLv30 + PCO
+        
+        // 職業タイプ
+        const jobTypes = ["sub1", "sub2", "xenon", "da", "kanna"];
+        const jobTypeNames = ["メインステ+サブステ１", "メインステ+サブステ２", "ゼノン", "デーモンアヴェンジャー", "カンナ"];
+
+        // 職業タイプごとのステータスペイン
+        const tempAttack = [
+            { name: "A/MA 基本数値", indexname: "attack", unit: "" },
+            { name: "A/MA %", indexname: "attackper", unit: "%", indent: true}
+        ];
+        const tempDamages = [
+            { name: "ダメージ %", indexname: "damage", unit: "%" },
+            { name: "ボスダメ %", indexname: "bossdamage", unit: "%", indent: true },
+            { name: "防御無視 %", indexname: "ignoredef", unit: "%" },
+            { name: "クリダメ %", indexname: "criticaldamage", unit: "%" }
+        ];
+        function createTempStatus(name, indexname){
+            return [
+                { name: name+" 基本数値", indexname: indexname,         unit: "" },
+                { name: name+" %",        indexname: indexname+"per",   unit: "%", indent: true },
+                { name: name+" %未適用",  indexname: indexname+"final", unit: "", indent: true }
+            ];
+        }
+        const tempAllStatus = { name: "オールステ %", indexname: "allstatusper", unit: "%" };
+        
+        const statusList = {
+            sub1: [].concat(
+                tempDamages, tempAttack,
+                createTempStatus("メイン", "status1"),
+                createTempStatus("サブ", "status2"),
+                tempAllStatus
+                ),
+            sub2: [].concat(
+                tempDamages, tempAttack,
+                createTempStatus("メイン", "status1"),
+                createTempStatus("サブ1", "status2"),
+                createTempStatus("サブ2", "status3"),
+                tempAllStatus
+                ),
+            xenon: [].concat(
+                tempDamages, tempAttack,
+                createTempStatus("STR", "status1"),
+                createTempStatus("DEX", "status2"),
+                createTempStatus("LUK", "status3"),
+                tempAllStatus
+                ),
+            da: [].concat(
+                tempDamages, tempAttack,
+                { name: "HP 基本数値", indexname: "HP",      unit: "" },
+                { name: "HP 基本",     indexname: "HPap",    unit: "", indent: true },
+                { name: "HP %",        indexname: "HPper",   unit: "%", indent: true },
+                { name: "HP %未適用",  indexname: "HPfinal", unit: "", indent: true },
+                createTempStatus("STR", "status2"),
+                tempAllStatus
+                ),
+            kanna: [].concat(
+                tempDamages, tempAttack,
+                createTempStatus("INT", "status1"),
+                createTempStatus("LUK", "status2"),
+                { name: "HPMP 基本数値",    indexname: "HP",      unit: "" },
+                { name: "HPMP %",       indexname: "HPper",   unit: "%", indent: true },
+                { name: "HPMP %未適用", indexname: "HPfinal", unit: "", indent: true },
+                tempAllStatus
+                )
+        };
+        
+        // ドラッグ中のinput-item・ドラッグ中かの判定にも使う
+        let draggingItem = null; 
+        
+        // ハイパーステータス計算用
+        let hyperpoint = 100;
+        let hyperAccuracy = 5;
+        let instanceHyper = {};
+        const requireHyperPointNext = [1, 2, 4, 8, 10, 15, 20, 25, 30, 35, 50, 65, 80, 95, 110];
+        const requireHyperPointSum = [0, 1, 3, 7, 15, 25, 40, 60, 85, 115, 150, 200, 265, 345, 440, 550];
+        const tempHyperGrowth30times = Array.from({length: 16}, (_, n) => 30*n);
+        const tempHyperGrowth3times = Array.from({length: 16}, (_, n) => 3*n);
+        const hyperGrowth = {
+            "status1final": tempHyperGrowth30times,
+            "status2final": tempHyperGrowth30times,
+            "status3final": tempHyperGrowth30times,
+            "HPper": Array.from({length: 16}, (_, n) => 2*n),
+            "criticaldamage": Array.from({length: 16}, (_, n) => n),
+            "ignoredef": tempHyperGrowth3times,
+            "damage": tempHyperGrowth3times,
+            "bossdamage" : Array.from({length: 16}, (_, n) => (n <= 5 ? 3*n : 4*n-5)),
+            "attack": tempHyperGrowth3times
+        };
+        
+        class Preset{
+            constructor(){
+                this.selectedJob = jobTypes[0],
+                this.enemyDef = 380,
+                this.stats = {}
+            }
+        }
+        
+        class StatInputs {
+            constructor(){
+                this.efficiencyPer = 1;
+                this.inputs = [];
+            }
+        }
+        
+        // UI初期化
+        initializeUI();
+        
+        // LocalStorageアクセス・成功時UIに反映
+        loadLocalStorage();
+        
+        // ページを閉じたときにLocalStorage保存のディレイ中なら保存する
+        window.addEventListener('beforeunload', () => {
+            if ( 0 < storeTimer ) {
+                clearTimeout(storeTimer);
+                saveLocalStorage();
+            }
+        });
+        
+        // 枠外クリックでドロップダウンを閉じる
+        document.addEventListener('click', (e) => {
+            const containers = document.getElementsByClassName('dropdown-container');
+            for ( let container of containers){
+                if (!container.contains(e.target)) {
+                    let dropdownMenu = container.querySelector('.dropdown-menu.open');
+                    if (dropdownMenu)
+                        dropdownMenu.classList.remove('open');
+                }
+            }
+        });
+        
+        // 枠外クリックで比較表を閉じる
+        document.addEventListener('click', (e) => {
+            closeCompare(e);
+        });
+        
+        /*---------------------------------------------------------------------*/
+        
+        function resetData() {
+            const temp = {
+                presetNames: ["プリセットA", "プリセットB", "プリセットC", "プリセットD"],
+                selectedPreset: 0,
+                presets: []
+            };
+            temp.presetNames.forEach( name => {
+                temp.presets.push(new Preset());
+            });
+            
+            for ( let key in data ) delete data[key];
+            for ( let key in temp ) data[key] = temp[key];
+        }
+        
+        function createDefaultPreset() {
+            return {
+                selectedJob: jobTypes[0],
+                enemyDef: 380,
+                stats: {}
+            }
+        }
+        
+        function initializeUI(){
+            resetData();
+            
+            // プリセットUIの生成
+            const presetMenu = document.getElementById('preset-dropdown-menu');
+            presetMenu.innerHTML = '';
+            data.presetNames.forEach( (name, i) => {
+                let strSelected = i == data.selectedPreset ? 'selected' : '';
+                presetMenu.innerHTML += `
+                    <div class="preset-item ${strSelected}" id="preset-item${i}">
+                        <button class="preset-button ${strSelected}" onclick="selectPreset(${i})">${strSelected ? '&#x2713' : ''}</button>
+                        <input type="text" class="preset-input" value="${name}" maxlength=30
+                            onchange="updatePresetName(${i}, this.value)" oninput="this.onchange()">
+                    </div>
+                `;
+            } );
+            
+            // 職業タイプ選択の生成
+            const jobselect = document.getElementById('joblist-select');
+            jobselect.innerHTML = '';
+            jobTypes.forEach( (type, i) => {
+                const option = document.createElement('option');
+                option.label = jobTypeNames[i];
+                option.value = type;
+                jobselect.appendChild(option);
+            } );
+            
+            // プリセットの反映
+            selectPreset(data.selectedPreset);
+        }
+        
+        function loadSelectedPreset(){
+            // 職業タイプの反映
+            const joblist = document.getElementById('joblist-select');
+            joblist.value = preset.selectedJob; // 対応するoptionを選択（イベントは発火しない）
+            
+            // 敵防御率の反映
+            const enemydef = document.getElementById('enemydef-input');
+            enemydef.value = preset.enemyDef;
+            
+            // ステータスペインの生成
+            const container = document.getElementById("status-container");
+            const order1 = document.getElementById("status-order1");
+            const order2 = document.getElementById("status-order2");
+            order1.innerHTML = '';
+            order2.innerHTML = '';
+            inputId = 0;
+            let stats = preset.stats;
+            if (!stats){
+                stats = preset.stats = {};
+            }
+            const fragment1 = document.createDocumentFragment();
+            const fragment2 = document.createDocumentFragment();
+            const statuses = statusList[preset.selectedJob];
+            statuses.forEach( (status, idx) => {
+                let stat = stats[status.indexname];
+                if (stat){
+                    // inputIdの再割り当て
+                    stat.inputs.forEach( input =>{
+                        input.id = inputId++;
+                    });
+                }else{
+                    stat = stats[status.indexname] = new StatInputs();
+                }
+                let fragment = fragment1;
+                if (6 <= idx) fragment = fragment2;
+                fragment.appendChild(createStatusPane(status, stat.efficiencyPer));
+            });
+            order1.appendChild(fragment1);
+            order2.appendChild(fragment2);
+            
+            // ステータスペインの背景色を指定するために高さ計算
+            const statuspanes = document.getElementsByClassName('status-pane');
+            Array.from(statuspanes).forEach( e => {
+                let height = e.firstElementChild.offsetHeight;
+                e.style.background = `linear-gradient(to bottom, white 0 ${height}px, #f8f9fa ${height}px 100%)`;
+            });
+            
+            // input-item項目削除時の確認フラグリセット
+            flagConfirmRemoveInput = true;
+            
+            // input-itemの生成
+            statuses.forEach( status => renderInputs(status.indexname) );
+            
+            // ステータス計算・UIの調整
+            updateDisplay();
+        }
+        
+        function createStatusPane(data, efficiencyPer = 1){
+            
+            let htmltext = `
+                <div class="status-pane" data-stat="${data.indexname}" style="${data.indent ? 'margin-left: 20px' : ''}">
+                    <div class="status-header" onclick="onClickStatusHeader.apply(this);">
+                        <div class="status-main">
+                            <div class="status-name">${data.name}</div>
+                            <div class="status-value" id="${data.indexname}Total"></div>
+                            <div class="status-unit">${data.unit}</div>
+                        </div>
+                        <div class="status-efficiency">
+                            <div class="efficiency-spacer"></div>
+                            <input type="number" class="input-value efficiency-per" id="${data.indexname}Per" value="${efficiencyPer}" step="any" maxlength=30
+                                onchange="updateEfficiencyPer('${data.indexname}', this.value)" oninput="this.onchange();"
+                                onclick="event.stopPropagation();">
+                            <div class="efficiency-unit">${data.unit}</div>
+                            <div class="efficiency-text">あたり最終ダメ</div>
+                            <div class="efficiency-container" id="${data.indexname}EfficiencyContainer">
+                                <div class="efficiency-rate" id="${data.indexname}Efficiency"
+                                    onclick="openCompare('${data.indexname}'); event.stopPropagation();">+0.0000%</div>
+                                <div class="efficiency-compare" id="${data.indexname}Compare" onclick="event.stopPropagation()"></div>
+                            </div>
+                        </div>
+                        <div class="chevron">&#x276F;</div>
+                    </div>
+                    <div class="input-panel" style='display: none;'>
+                        <div class="input-content">
+                            <div id="${data.indexname}Inputs"></div>
+                            <button class="add-btn" onclick="addInput('${data.indexname}')">+ 項目を追加</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const temp = document.createElement('div');
+            temp.innerHTML = htmltext;
+            return temp.firstElementChild;
+        }
+        
+        function renderInputs(statType) {
+            const container = document.getElementById(statType + 'Inputs');
+            container.innerHTML = '';
+            
+            // プリセットを適用したinput-itemを作成して追加
+            const stats = preset.stats;
+            stats[statType].inputs.forEach(input => {
+                const line = document.createElement('div');
+                line.className = 'input-item-container';
+                line.dataset['id'] = input.id;
+                line.dataset['type'] = statType;
+                
+                const handle =  document.createElement('div');
+                handle.className = 'input-item-handle';
+                if (window.PointerEvent){
+                    handle.onpointerdown = onItemDragStart;
+                    document.onpointerup = onItemDragEnd;
+                } else {
+                    // PointerEvent非対応向け代替(touch系は非対応)
+                    handle.onmousedown = onItemDragStart;
+                    document.onmouseup = onItemDragEnd.call(this, event);
+                }
+                
+                const div = document.createElement('div');
+                div.className = 'input-item';
+                div.innerHTML = `
+                    <input type="checkbox" class="input-checkbox" ${input.enabled ? 'checked' : ''}
+                        onchange="updateInputEnabled('${statType}', ${input.id}, this.checked)">
+                    <div class="input-name-container">
+                        <input type="text" class="input-name" value="${input.name}" placeholder="項目名を入力"  maxlength=30
+                            onchange="updateInputName('${statType}', ${input.id}, this.value)">
+                    </div>
+                    <input type="number" class="input-value" value="${input.value}" step="any" maxlength=30
+                        onchange="updateInputValue('${statType}', ${input.id}, this.value)" oninput="this.onchange();">
+                    <button class="delete-btn" onclick="removeInput('${statType}', ${input.id})">
+                        <svg viewBox="0 0 64 64" role="img" aria-hidden="true">
+                            <circle cx="32" cy="32" r="30" fill="#ff5722" />
+                            <g stroke="#fff" stroke-width="6" stroke-linecap="round">
+                                <line x1="20" y1="20" x2="44" y2="44" />
+                                <line x1="44" y1="20" x2="20" y2="44" />
+                            </g>
+                        </svg>
+                    </button>
+                `;
+                line.appendChild(handle);
+                line.appendChild(div);
+                container.appendChild(line);
+            });
+        }
+        
+        
+        
+        // モダル共通処理
+        function openModal(){
+            const overlay = document.getElementById('overlay');
+            overlay.style.display = 'flex';
+            document.body.style.overflow = 'hidden'; // スクロールを無効化
+        }
+        function closeModal() {
+            const overlay = document.getElementById('overlay');
+            overlay.style.display = 'none';
+            document.body.style.overflow = 'auto'; // スクロールを有効化
+            modal = document.querySelector('.modal.open');
+            if (modal) modal.classList.remove('open');
+        }
+        
+        // バックアップモダル
+        function openFileModal() {
+            showFileStatusMessage("");
+            const modal = document.getElementById('file-modal');
+            modal.classList.add('open');
+            openModal();
+        }
+        
+        function showFileStatusMessage(str, type="success") {
+            const statusmessage = document.getElementById('file-statusmessage');
+            statusmessage.innerHTML = str;
+            statusmessage.style.display = str == "" ? "none" : "";
+            statusmessage.classList.add( type == "error" ? "error" : "success");
+            statusmessage.classList.remove( type == "error" ? "success" : "error");
+        }
+        
+        // 入力に応じてストレージを更新する（呼び出し側で待機制御）
+        function saveLocalStorage() {
+            const jsonStr = JSON.stringify(data); //整形なし
+            localStorage.setItem('statuscalc-data', jsonStr);
+        }
+        function loadLocalStorage() {
+            const jsonStr = localStorage.getItem('statuscalc-data');
+            if (jsonStr){
+                try{
+                    restoreDataFromJSON(jsonStr);
+                } catch(e){
+                    console.error(e);
+                }
+            }
+        }
+    
+        function saveJSON(){
+            showFileStatusMessage("");
+            const jsonStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "backup" + getTimestamp(new Date()) + ".json";
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function loadJSON(){
+            showFileStatusMessage("");
+            document.getElementById('fileInput').click();
+        }
+        
+        function handleFileLoad(event) {
+            const file = event.target.files[0];
+            if (!file){
+                showFileStatusMessage("ファイルのロードに失敗", "error");
+                return;
+            }
+
+            if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
+                showFileStatusMessage("JSONファイルを選択してください", "error");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    restoreDataFromJSON(e.target.result);
+                    showFileStatusMessage('データの復元に成功', 'success');
+                } catch (error) {
+                    console.error(error.message);
+                    showFileStatusMessage('JSONファイルが壊れています', 'error');
+                }
+            };
+            
+            reader.onerror = function() {
+                showFileStatusMessage('ファイルのロードに失敗', 'error');
+            };
+            
+            reader.readAsText(file);
+            
+            // input要素をリセット
+            event.target.value = '';
+        }
+        
+        function restoreDataFromJSON(jsonstr){
+            try {
+                const temp = JSON.parse(jsonstr);
+                
+                for ( let key in data ) {
+                    // 一応簡易な型チェックだけしておく
+                    if (typeof data[key] !== typeof temp[key]){
+                        const err = new Error("JSONファイルが不正");
+                        throw err;
+                    }
+                    data[key] = temp[key];
+                }
+            } catch (e) {
+                throw e;
+                return;
+            }
+            
+            // 選択プリセットの取得または初期化
+            let num = data.selectedPreset;
+            if (num < 0 || data.presetNames.length <= num) num = data.selectedPreset = 0;
+            preset = data.presets[num];
+            if (!preset){
+                preset = data.presets[num] = createDefaultPreset();
+            }
+            selectPreset(num);
+        }
+        
+        function getTimestamp(date) {
+            const YYYY = date.getFullYear();
+            const MM   = String(date.getMonth() + 1).padStart(2, '0');
+            const DD   = String(date.getDate()).padStart(2, '0');
+            const hh   = String(date.getHours()).padStart(2, '0');
+            const mm   = String(date.getMinutes()).padStart(2, '0');
+            const ss   = String(date.getSeconds()).padStart(2, '0');
+            return `${YYYY}${MM}${DD}${hh}${mm}${ss}`;
+        }
+        
+        
+        // 選択プリセット・プリセット名変更処理
+        function updatePresetName(num, name) {
+            data.presetNames[num] = name;
+            if (num === data.selectedPreset){
+                const presetButton = document.getElementById('preset-dropdown-button');
+                presetButton.textContent = name;
+            }
+        }
+
+        function selectPreset(num) {
+            if (num < 0 || data.presetNames.length <= num) num = 0;
+            const presetMenu = document.getElementById('preset-dropdown-menu');
+            const presetButton = document.getElementById('preset-dropdown-button');
+            
+            // 前の選択を解除
+            presetMenu.querySelectorAll('.preset-item.selected').forEach( item => {
+                item.classList.remove('selected');
+                const btn = item.firstElementChild;
+                btn.classList.remove('selected');
+                btn.textContent = '';
+            });
+
+            // 新しい選択を適用
+            data.selectedPreset = num;
+            preset = data.presets[num];
+            if (!preset){
+                preset = data.presets[num] = createDefaultPreset();
+            }
+            const selectedItem = presetMenu.children[num];
+            const selectedButton = selectedItem.children[0];
+
+            selectedItem.classList.add('selected');
+            selectedButton.classList.add('selected');
+            selectedButton.textContent = "\u2713";
+
+            // メインボタンのテキストを更新
+            presetButton.textContent = data.presetNames[num];
+
+            // ドロップダウンを閉じる
+            presetMenu.classList.remove('open');
+            
+            // プリセット内容の反映
+            loadSelectedPreset();
+        }
+        
+        // 職業タイプ変更処理
+        function changeJob(num){
+            if (num < 0 || jobTypes.length <= num) num = 0;
+            preset.selectedJob = jobTypes[num];
+            loadSelectedPreset(); // UIにも適用される
+        }
+        
+        // 敵防御率変更処理
+        function updateEnemyDef(value){
+            preset.enemyDef = +value;
+            updateDisplay();
+        }
+        
+        // ドロップダウン汎用処理
+        function onDropdownButtonClick(){
+            // メインボタンクリックでドロップダウン表示/非表示
+            const dropdownMenu = this.parentElement.querySelector('.dropdown-menu');
+            dropdownMenu.classList.toggle('open');
+        }
+        
+        
+        // ステータスペインを開閉する処理
+        function onClickStatusHeader(){
+            const pane = this.parentElement;
+            const isActive = pane.classList.contains('active');
+            
+            // 項目削除時の確認フラグリセット
+            flagConfirmRemoveInput = true;
+            
+            // 開いているペインを閉じる
+            document.querySelectorAll('.status-pane.active').forEach(p => {
+                const panel = p.querySelector('.input-panel');
+                // tabキーフォーカスを無効にするためにdisplay:none
+                panel.ontransitionend =function(){
+                    this.style.display = 'none';
+                };
+                panel.style.height = "0px";
+                p.classList.remove('active');
+                panel.classList.remove('active');
+            });
+            
+            // クリックされたペインを開く
+            if (!isActive) {
+                const panel = pane.querySelector('.input-panel');
+                panel.ontransitionend='';
+                panel.style.display = '';
+                const content = pane.querySelector('.input-content');
+                panel.style.height = content.scrollHeight + "px";
+                pane.classList.add('active');
+                panel.classList.add('active');
+            }
+        }
+        
+        
+        // input-item・追加ボタンの処理
+        function addInput(statType) {
+            const input = {
+                id: inputId,
+                name: '新しい項目',
+                value: 0,
+                enabled: true
+            };
+            inputId++;
+            
+            const stats = preset.stats;
+            stats[statType].inputs.push(input);
+            renderInputs(statType);
+            updateDisplay();
+        }
+        
+        function removeInput(statType, inputId) {
+            // 削除の際に確認。ペインを閉じるまでは再表示しない
+            if (flagConfirmRemoveInput){
+                if (confirm("項目を削除しますか")){
+                    flagConfirmRemoveInput = false;
+                } else return;
+            }
+            const stats = preset.stats;
+            stats[statType].inputs = stats[statType].inputs.filter(input => input.id !== inputId);
+            renderInputs(statType);
+            updateDisplay();
+        }
+        function updateInputEnabled(statType, inputId, enabled) {
+            const stats = preset.stats;
+            const input = stats[statType].inputs.find(input => input.id === inputId);
+            if (input) {
+                input.enabled = enabled;
+                updateDisplay();
+            }
+        }
+
+        function updateInputName(statType, inputId, name) {
+            const stats = preset.stats;
+            const input = stats[statType].inputs.find(input => input.id === inputId);
+            if (input) {
+                input.name = name;
+            }
+        }
+
+        function updateInputValue(statType, inputId, value) {
+            const stats = preset.stats;
+            const input = stats[statType].inputs.find(input => input.id === inputId);
+            if (input) {
+                input.value = parseFloat(value) || 0;
+                updateDisplay();
+            }
+        }
+
+        // 計算処理とUIへの反映・LocalStorageへの保存
+        function updateDisplay() {
+            // LocalStorageタイマーの中断
+            clearTimeout(storeTimer);
+            storeTimer = -1;
+            
+            // 各ステータスの更新
+            statusList[preset.selectedJob].forEach(status => {
+                let statType = status.indexname;
+                let total = statType === 'ignoredef' ? getIgnoreDef()*100 : getStatusSum(statType);
+                const efficiency = calculateEfficiency(statType);
+                const list = ['attack', 'status1', 'status2', 'status3', 'HP'];
+                // 基本数値は合計値をかっこ表示
+                let sumtxt = '';
+                if ( statType == "damage" ){
+                    let sum = getStatusSum(statType) + getStatusSum('bossdamage');
+                    sumtxt = ` (${sum})`;
+                } else if ( 0 <= list.indexOf(statType) ){
+                    sumtxt += ` (${calcStatusFinal(statType)})`;
+                }
+                document.getElementById(statType + 'Total').textContent = Math.round(total*10000)/10000 + sumtxt;
+                
+                const efficiencyEl = document.getElementById(statType + 'Efficiency');
+                efficiencyEl.textContent = `${efficiency > 0 ? '+' : ''}${( efficiency*100 ).toFixed(6)}%`;
+                
+                // 効率性の色分け
+                efficiencyEl.className = 'efficiency-rate';
+                if (efficiency > 0.0) {
+                    efficiencyEl.classList.add('efficiency-high');
+                } else {
+                    efficiencyEl.classList.add('efficiency-low');
+                }
+            });
+            
+            // 火力係数の更新
+            const coefdiv = document.getElementById('power-coefficient-value');
+            let coef = calculateEfficiency('val', 1);
+            coef *= 1 - preset.enemyDef * (1 - getIgnoreDef()) / 100; // 防御率を計算する
+            coefdiv.textContent = (~~coef).toLocaleString();
+            
+            // アクティブなステータス入力パネルの高さを再計算
+            const activePanel = document.getElementsByClassName("input-panel active")[0];
+            if (activePanel){
+                const content = activePanel.querySelector('.input-content');
+                activePanel.style.height = content.scrollHeight + "px";
+            }
+            
+            // LocalStorageへの保存(ディレイあり)
+            storeTimer = setTimeout(()=>{
+                storeTimer = -1;
+                saveLocalStorage();
+            }, 5000);
+        }
+        
+        // 各ステータスの最終合計値（表示用）
+        function calcStatusFinal(statType){
+            const stats = preset.stats;
+            const base = getStatusSum(statType);
+            const per = getStatusSum(statType + "per");
+            const fix = getStatusSum(statType + "final");
+            if ( statType.slice(0, 6) === 'status' ){
+                const allper = getStatusSum("allstatusper");
+                 return ~~(base * (1 + (per + allper) / 100)) + fix;
+            }
+            return ~~(base * (1 + per / 100)) + fix;
+        }
+
+        function getStatusSum(statType) {
+            const stats = preset.stats;
+            if (!stats[statType]) return 0;
+            let ret = stats[statType].inputs
+                       .filter(input => input.enabled)
+                       .reduce((sum, input) => sum + input.value, 0);
+            ret += instanceHyper[statType] || 0;
+            return ret;
+        }
+        function getIgnoreDef(){
+            const inputs = preset.stats['ignoredef'].inputs;
+            let ret = 1;
+            inputs.filter(input => input.enabled).forEach( input => {
+                let val = input.value
+                if (val > 0){
+                    ret *= 1 - Math.min(100, val)/100;
+                } else {
+                    if (100 <= -val) return;
+                    ret /= 1 - Math.min(100, -val)/100;
+                }
+            });
+            let val = instanceHyper['ignoredef'];
+            if (val !== undefined){
+                if (val > 0){
+                    ret *= 1 - Math.min(100, val)/100;
+                } else {
+                    if (100 <= -val) return;
+                    ret /= 1 - Math.min(100, -val)/100;
+                }
+            }
+            return 1 - ret;
+        }
+        
+        function calculateEfficiency(statType, effper=-1) {
+            if (effper < 0) effper = preset.stats[statType].efficiencyPer;
+            if (effper == 0) return 0;
+            
+            // 最終ダメージ換算を計算
+            let val = 1;
+            switch( statType ){
+                case 'damage':
+                case 'bossdamage':
+                    val = 100 + getStatusSum('damage') + getStatusSum('bossdamage');
+                    if (preset.selectedJob == "kanna") val += 華扇;
+                    break;
+                case 'ignoredef':
+                    let def = preset.enemyDef * (1 - getIgnoreDef());
+                    val = 100 * (100 / def - 1);
+                    break;
+                case 'criticaldamage':
+                    val = 100 + getStatusSum(statType) + 35;
+                    break;
+                case 'attack':
+                    if (preset.selectedJob == "kanna") return calculateEfficiency4(statType, effper);
+                    val = getStatusSum(statType);
+                    break;
+                case 'attackper':
+                    if (preset.selectedJob == "kanna") return calculateEfficiency4(statType, effper);
+                    val = 100 + getStatusSum(statType);
+                    break;
+                case 'val': // 火力係数　ハイパーステータス出力で比較にも使う
+                    // ダメボスダメ
+                    val = 100 + getStatusSum('damage') + getStatusSum('bossdamage');
+                    if (preset.selectedJob == "kanna") val += 華扇;
+                    val /= 100;
+                    // 無視　不足の場合に対応するため任意処理
+                    // val *= preset.enemyDef / 100 * (1 - getIgnoreDef())
+                    // クリダメ
+                    val *= (100 + getStatusSum('criticaldamage') + 35) / 100;
+                    // 攻撃 (100割り含む)
+                    val *= preset.selectedJob == "kanna" ? calculateEfficiency4(statType, 1)
+                        : getStatusSum('attack') * (1 + getStatusSum('attackper')/100);
+                    val /= 100;
+                    // ステ
+                    return val * calculateEfficiency2(statType, 1);
+                default:
+                    // メイン・サブステータス（職業タイプに依存）
+                    return calculateEfficiency2(statType, effper);
+            }
+            if (val <= 0) return 0;
+            return effper / val;
+        }
+        
+        function calculateEfficiency2(statType, effper=-1) {
+            if (effper < 0) effper = preset.stats[statType].efficiencyPer;
+            if (effper == 0) return 0;
+            
+            // 1ポイント増加時のダメージを計算(メイン・サブステ用)
+            let st1 = getStatusSum('status1')
+            ,   stp1 = getStatusSum('status1per')
+            ,   stf1 = getStatusSum('status1final')
+            ,   st2 = getStatusSum('status2')
+            ,   stp2 = getStatusSum('status2per')
+            ,   stf2 = getStatusSum('status2final')
+            ,   st3 = getStatusSum('status3')
+            ,   stp3 = getStatusSum('status3per')
+            ,   stf3 = getStatusSum('status3final')
+            ,   allp = getStatusSum('allstatusper');
+            
+            let coef = 1;
+            let match = statType.match(/^status(\d)(per|final)?$/);
+            let num = 0, suffix = '';
+            if (match){
+                [, num, suffix] = match;
+                num = (+num);
+            }
+            let val = 0;
+            switch (preset.selectedJob){
+                case 'kanna':
+                    if (statType.slice(0, 2) == "HP")
+                        return calculateEfficiency4(statType, effper);
+                case 'sub1':
+                    val = (st1 * ( 1 + (stp1 + allp) / 100) + stf1) * 4
+                            + (st2 * ( 1 + (stp2 + allp) / 100) + stf2);
+                    if (num == 0){ // allstatusper
+                        coef = (st1 * 4 + st2) / 100;
+                    } else {
+                        if (num == 1) coef = 4;
+                        if      (suffix == 'per') coef *= [st1, st2][num - 1] / 100;
+                        else if (suffix != 'final') coef *= 1 + ([stp1, stp2][num - 1] + allp) / 100;
+                    }
+                    break;
+                case 'sub2':
+                    val = (st1 * ( 1 + (stp1 + allp) / 100) + stf1) * 4
+                            + (st2 * ( 1 + (stp2 + allp) / 100) + stf2)
+                            + (st3 * ( 1 + (stp3 + allp) / 100) + stf3);
+                    if (num == 0){ // allstatusper
+                        coef = (st1 * 4 + st2 + st3) / 100;
+                    } else {
+                        if (num == 1) coef = 4;
+                        if      (suffix == 'per') coef *= [st1, st2, st3][num - 1] / 100;
+                        else if (suffix != 'final') coef *= 1 + ([stp1, stp2, stp3][num - 1] + allp) / 100;
+                    }
+                    break;
+                case 'xenon':
+                    val = (st1 * ( 1 + (stp1 + allp) / 100) + stf1)
+                            + (st2 * ( 1 + (stp2 + allp) / 100) + stf2)
+                            + (st3 * ( 1 + (stp3 + allp) / 100) + stf3);
+                    if (num == 0){ // allstatusper
+                        coef = (st1 + st2 + st3) / 100;
+                    } else {
+                        if      (suffix == 'per') coef *= [st1, st2, st3][num - 1] / 100;
+                        else if (suffix != 'final') coef *= 1 + ([stp1, stp2, stp3][num - 1] + allp) / 100;
+                    }
+                    break;
+                case 'da':
+                    return calculateEfficiency3(statType, effper);
+            }
+            if (statType == "val") return val;
+            if (val <= 0) return 0;
+            return effper * coef / val;
+        }
+        function calculateEfficiency3(statType, effper=-1) {
+            if (effper < 0) effper = preset.stats[statType].efficiencyPer;
+            if (effper == 0) return 0;
+            
+            // デーモンアヴェンジャー
+            let hp = getStatusSum('HP')
+            ,   hpa = getStatusSum('HPap')
+            ,   hpp = getStatusSum('HPper')
+            ,   hpf = getStatusSum('HPfinal')
+            ,   st2 = getStatusSum('status2')
+            ,   stp2 = getStatusSum('status2per')
+            ,   stf2 = getStatusSum('status2final')
+            ,   allp = getStatusSum('allstatusper');
+            let val = (hpa + (hp * (1 + hpp / 100) + hpf - hpa) * 0.8) / 3.5
+                    + (st2 * ( 1 + (stp2 + allp) / 100) + stf2);
+            const coefMap  = {
+                "HP": (1 + hpp / 100) * 0.8 / 3.5,
+                "HPap": (1 + (hpp / 100 * 0.8)) / 3.5,
+                "HPper": hp / 100 * 0.8 / 3.5,
+                "HPfinal": 0.8 / 3.5,
+                "status2": 1 + (stp2 + allp) / 100,
+                "status2per": st2 / 100,
+                "status2final": 1,
+                "allstatusper": st2 / 100
+            }
+            if (statType == "val") return val;
+            if (val <= 0) return 0;
+            return effper * coefMap[statType] / val;
+        }
+        
+        function calculateEfficiency4(statType, effper=-1) {
+            if (effper < 0) effper = preset.stats[statType].efficiencyPer;
+            if (effper == 0) return 0;
+            
+            // カンナ MA,HP バグを考慮する
+            let atk = getStatusSum('attack')
+            ,   atkp = getStatusSum('attackper')
+            ,   hp = getStatusSum('HP')
+            ,   hpp = getStatusSum('HPper')
+            ,   hpf = getStatusSum('HPfinal');
+            
+            const hplimit = 140000;
+            // ベース値は切り捨てて出力を最大化する
+            const hpval = Math.min(hplimit, ~~(hp * (1 + hpp / 100)) + hpf);
+            const hpatk = ~~(hpval / 700);
+            
+            let val = (atk - hpatk) * (1 + atkp / 100) + hpatk * (1 + 平均段数);
+            
+            if (statType == "val") return val;
+            if (val <= 0) return 0;
+            
+            if (statType == "attack")
+                return effper * (1 + atkp / 100) / val;
+            if (statType == "attackper")
+                return effper * (atk - hpatk) / 100 / val;
+            
+            // 増加後のHPを計算(HPfinal以外切り捨てなし)
+            let hpval2 = hp * (1 + hpp / 100) + hpf;
+            switch (statType){
+                case "HP": hpval2 += effper * (1 + hpp / 100); break;
+                case "HPper": hpval2 += hp * effper / 100; break;
+                case "HPfinal": hpval2 = hpval + effper; break;
+            }
+            hpval2 = Math.min(hplimit, hpval2);
+            
+            // MA増加量の計算
+            const hpatk2 = (hpval2 - hpval) / 700; // 切り捨てない
+            return hpatk2 * ( -atkp / 100 + 平均段数) / val;
+        }
+
+        
+        function updateEfficiencyPer(statType, value) {
+            preset.stats[statType].efficiencyPer = +value;
+            updateDisplay();
+        }
+        
+        //効率比較表を開く
+        function openCompare(statType){
+            //開いている表があれば閉じる
+            if (document.querySelector('.efficiency-container.open')){
+                closeCompare();
+                return;
+            }
+            const baseStat = statusList[preset.selectedJob].find(status => status.indexname == statType);
+            const baseName = baseStat.name;
+            const baseType = baseStat.indexname;
+            const baseEff = calculateEfficiency(baseType);
+            const basePer = preset.stats[baseType].efficiencyPer;
+            if (baseEff <= 0) return;
+            
+            const container = document.getElementById(baseType + 'EfficiencyContainer');
+            const compare = container.getElementsByClassName('efficiency-compare')[0];
+            compare.innerHTML = `<table></table>`;
+            
+            const fragment = document.createDocumentFragment();
+            const tr =  document.createElement('tr');
+            tr.className = 'table-header';
+            tr.innerHTML = '<td colspan=99></td>';
+            fragment.appendChild(tr.cloneNode(true));
+            statusList[preset.selectedJob].forEach( status => {
+                const name = status.name;
+                const type = status.indexname;
+                const eff = calculateEfficiency(type);
+                const per = preset.stats[type].efficiencyPer;
+                const comp = eff < 0 ? 0 : eff / baseEff;
+                const recip = eff <= 0 ? 0 : baseEff / eff;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${name}</td>
+                    <td>x</td>
+                    <td>${per}</td>
+                    <td>= x</td>
+                    <td>${comp.toFixed(2)}</td>
+                    <td>= /</td>
+                    <td>${recip.toFixed(2)}</td>
+                `;
+                fragment.appendChild(tr);
+            } );
+            tr.className = 'table-footer';
+            fragment.appendChild(tr);
+            compare.firstElementChild.appendChild(fragment);
+            container.classList.add('open');
+            // 自動スクロール
+            document.querySelector(`.status-pane[data-stat="${statType}"]`).scrollIntoView({ behavior: 'smooth', block: 'start' });;
+            
+        }
+        function closeCompare(e = {}){
+            const containers = document.querySelectorAll('.efficiency-container.open');
+            for (let container of containers){
+                 if (!container.contains(e.target)) {
+                     container.classList.remove('open');
+                 }
+            }
+        }
+        
+        function openHyperModal(){
+            // ポイントの初期化
+            const input = document.getElementById('hyper-point');
+            if (+input.value <= 0) updateCalcHyperPoint();
+            else updateHyperPoint(input.value);
+            // 結果表示の初期化
+            const container = document.getElementById('hyper-result-container');
+            container.innerHTML = '';
+            // モダルを開く
+            const modal = document.getElementById('hyper-modal');
+            modal.classList.add('open');
+            openModal();
+        }
+        function updateCalcHyperPoint(){
+            const lv = +document.getElementById('hyper-lv').value;
+            const dec = +document.getElementById('hyper-decrease').value;
+            const input = document.getElementById('hyper-point');
+            let pt = getHyperPointByLv(lv) - dec;
+            updateHyperPoint(pt);
+            input.value = pt;
+        }
+        function updateHyperPoint(val){
+            hyperpoint = +val;
+        }
+        function outputHyperList(){
+            const container = document.getElementById('hyper-result-container');
+            container.innerHTML = '';
+            const table = document.createElement('table');
+            table.id = 'hyper-result-table';
+            const list = getHyperList();
+            let inner = '';
+            let sumpt = 0;
+            Object.keys( hyperGrowth ).forEach( indexname => {
+                if ( !list.hasOwnProperty(indexname) ) return;
+                const name = statusList[preset.selectedJob].find( item => item.indexname == indexname ).name;
+                const lv = list[indexname];
+                inner += `<tr class="hyper-result-tr">
+                              <td class="hyper-result-name">${name}</td>
+                              <td class="hyper-result-lv">${lv}</td>
+                          </tr>`;
+                sumpt += requireHyperPointSum[lv];
+            });
+            table.innerHTML = 
+                         `<tr class="hyper-result-tr hyper-result-remain">
+                              <td class="hyper-result-name">余り</td>
+                              <td class="hyper-result-lv">${hyperpoint - sumpt}pt</td>
+                          </tr>`
+                          + inner;
+            container.appendChild(table);
+        }
+        function getHyperList(){
+            const igd = getIgnoreDef();
+            let igdmin = 0, igdmax = 15;
+            if (igd >= 100){
+                igdmax = 0;
+            }else{
+                for (; igdmin < 15; igdmin++){
+                    // ポイント制限判定
+                    if ( hyperpoint < requireHyperPointSum[igdmin] ){
+                        igdmax = igdmin; break;
+                    }
+                    // ダメージが通ったら終了
+                    let def = preset.enemyDef * (1 - getIgnoreDef()) * (1 - hyperGrowth['ignoredef'][igdmin]/100);
+                    if (def < 100) break;
+                }
+            }
+            
+            let hpmax = 0;
+            // カンナはHP換算上限を考慮してHPperを振る
+            if (preset.selectedJob == 'kanna'){
+                let hp = getStatusSum('HP')
+                ,   hpp = getStatusSum('HPper')
+                ,   hpf = getStatusSum('HPfinal')
+                for (; hpmax <= 15; hpmax++){
+                    let sumhp = ~~(hp * (1 + (hpp + hyperGrowth['HPper'][hpmax])/100)) + hpf; //切り捨てあり
+                    if ( 140000 <= sumhp ) break;
+                }
+                if (15 < hpmax) hpmax = 15;
+            }
+            
+            // 対象となるステータスのリストを生成
+            const targetList = {};
+            const targetEffs = [];
+            statusList[preset.selectedJob].forEach( e => {
+                if ( !hyperGrowth.hasOwnProperty(e.indexname) ) return;
+                const eff = calculateEfficiency(e.indexname, hyperGrowth[1]);
+                
+                // 防御率無視は強制的に入れる
+                if ( e.indexname == 'ignoredef' ){
+                    targetList[e.indexname] = {eff: eff, min: igdmin, max: igdmax};
+                    targetEffs.push({name: e.indexname, eff: 0, lv: igdmin});
+                    return;
+                }
+                // 効率が0なら除外
+                if ( eff <= 0 ) return;
+                if ( e.indexname == 'HPper' ){
+                    targetList[e.indexname] = {eff: eff, min: 0, max: hpmax};
+                    targetEffs.push({name: e.indexname, eff: 0, lv: 0});
+                    return;
+                }
+                targetList[e.indexname] = {eff: eff, min:0, max: 15};
+                targetEffs.push({name: e.indexname, eff: 0, lv: 0});
+            });
+            
+            // 順位付けなどに使う
+            const targets = Object.keys(targetList);
+            
+            // 効率昇順ソート
+            targets.sort( (a, b) => targetList[a].eff - targetList[b].eff );
+            // 防御無視を最後尾に
+            targets.push(
+                ...targets.splice( targets.indexOf('ignoredef'), 1 )
+            );
+            
+            // 貪欲法である程度振った初期値を作る
+            // hyperAccuracy=1～10(遅い・高精度) 5あたりでもほぼ最適値）
+            instanceHyper = {};
+            let temppoint = 0;
+            let maxlv = 1;
+            // 初期値のセット
+            targetEffs.forEach((elem, idx) => {
+                instanceHyper[elem.name] = hyperGrowth[elem.name][elem.lv];
+                temppoint += requireHyperPointSum[elem.lv];
+                if (maxlv < elem.lv) maxlv = elem.lv;
+            });
+            while ( requireHyperPointNext[Math.min(14, maxlv)] * hyperAccuracy < hyperpoint - temppoint){
+                // 効率再計算
+                targetEffs.forEach((elem, idx) => {
+                    if (15 <= elem.lv){
+                        elem.eff = 0;
+                        return;
+                    }
+                    // 効率下位のグループには振らないことで最適値を作りやすくする
+                    if ( targets.indexOf(elem.name) < 4 ){
+                        elem.eff = 0; return;
+                    }
+                    
+                    const reqpt = requireHyperPointNext[elem.lv];
+                    const growth = hyperGrowth[elem.name][elem.lv+1] - hyperGrowth[elem.name][elem.lv]
+                    // ポイント不足
+                    if (hyperpoint - temppoint < reqpt){
+                        elem.eff = 0;
+                    }
+                    elem.eff =  calculateEfficiency(elem.name, growth);
+                    elem.eff /= reqpt;
+                });
+                // 最効率のindex取得
+                const idx = targetEffs.reduce((idx, x, i, arr) => x.eff > arr[idx].eff ? i : idx, 0);
+                const target = targetEffs[idx];
+                if (15 <= target.lv) break;
+                temppoint += requireHyperPointNext[target.lv];
+                if (maxlv < ++target.lv) maxlv = target.lv;
+                if (15 <= target.lv) target.eff = 0;
+                instanceHyper[ target.name ] = hyperGrowth[ target.name ][ target.lv ];
+            }
+            instanceHyper = {};
+            
+            // 最小レベルの更新
+            targetEffs.forEach( elem => {
+                targetList[elem.name].min = elem.lv;
+            });
+            
+            // 現在レベル高い順ソート
+            targets.sort((a, b) => targetList[b].min - targetList[a].min);
+            
+            // ダメージ≦ボスダメなのでボスダメを優先して処理してダメージへ条件付け
+            let index0 = targets.indexOf('damage');
+            let index1 = targets.indexOf('bossdamage');
+            if (index0 < index1){
+                targets.splice(index0, 0, ...targets.splice(index1, 1));
+            }
+            
+            // 残りを条件付き総当たりしたリストを作成
+            let mappingList = [[]];
+            mappingList[0].point = hyperpoint - temppoint;
+            mappingList[0].boss = 0;
+            mappingList[0].minlv = 15;
+            mappingList[0].instance = {};
+            
+            let remainingCost = 0;
+            targets.forEach( e => {
+                remainingCost += requireHyperPointSum[targetList[e].max]-requireHyperPointSum[targetList[e].min];
+            });
+            targets.forEach( (type, targetidx) => {
+                remainingCost -= requireHyperPointSum[targetList[type].max]-requireHyperPointSum[targetList[type].min];
+                
+                const temp = [];
+                mappingList.forEach( map => {
+                    const target = targetList[type];
+                    for (let i = target.min; i <= target.max; i++){
+                        const reqpt = requireHyperPointSum[i] - requireHyperPointSum[target.min];
+                        
+                        // ダメよりボスダメ優先
+                        if (type == 'damage' && map.boss < i) break;
+                        
+                        // ポイント不足
+                        if ( map.point < reqpt ) break;
+                        
+                        // ポイント過剰
+                        if ( remainingCost < map.point - reqpt ){
+                            let remain = map.point - remainingCost - reqpt;
+                            // 残りを全て最大にして余るポイントで振れるところまでスキップ
+                            if ( i < target.max && requireHyperPointNext[i] <= remain ) continue;
+                            // 残りで他の要素に振れるなら最適ではないので抜ける
+                            if ( map.minlv < 15 && requireHyperPointNext[map.minlv] <= remain ) break;
+                        }
+                        
+                        const temp2 = [...map, i];
+                        temp2.boss = type == 'bossdamage' ? i : map.boss;
+                        temp2.point = map.point - reqpt;
+                        temp2.minlv = Math.min(i, map.minlv);
+                        temp2.instance = {...map.instance};
+                        temp2.instance[type] = hyperGrowth[type][i];
+                        temp.push(temp2);
+                    }
+                });
+                mappingList = temp;
+            });
+            
+            // 総当たりリストから最効率のものを抜き出す
+            instanceHyper = {};
+            const baseEff = calculateEfficiency('val', 1);
+            const baseIgd = 1 - preset.enemyDef * (1 - getIgnoreDef()) / 100;
+            let isLackIgd = (baseIgd <= 0);
+            let bestEff = 0;
+            let bestEffIdx = -1;
+            let maxIgd = 0;
+            const igdIdx = targets.indexOf('ignoredef');
+            mappingList.forEach( (map, midx) => {
+                instanceHyper = map.instance;
+                /*
+                targets.forEach( (name, tidx) =>{
+                    instanceHyper[name] = hyperGrowth[name][map[tidx]];
+                });
+                */
+                let result = calculateEfficiency('val', 1);
+                let def = 1 - preset.enemyDef * (1 - getIgnoreDef()) / 100;
+                if ( 0 < def ){
+                    if ( isLackIgd ){
+                        // 無視不足が解消されたら記録をリセットする
+                        isLackIgd = false;
+                        bestEff = 0;
+                        bestEffIdx = -1;
+                    }
+                    result *= def;
+                    if ( bestEff < result ){
+                        bestEff = result;
+                        bestEffIdx = midx;
+                    }
+                } else if( isLackIgd ) {
+                    // 無視不足なら無視率を最優先し、無視を計算に含まない
+                    if ( maxIgd <= map[igdIdx] ){
+                        maxIgd = map[igdIdx];
+                        if ( bestEff < result ){
+                            bestEff = result;
+                            bestEffIdx = midx;
+                        }
+                    }
+                }
+            });
+            instanceHyper = {};
+            
+            if (bestEffIdx < 0) return {};
+            
+            // {indexName: lv}に変換
+            const ret = {};
+            targets.forEach( (name, idx) => {
+                ret[name] = mappingList[bestEffIdx][idx];
+            });
+            return ret;
+        }
+        function getHyperPointByLv(lv){
+            if (lv < 140) return 0;
+            const r = ~~(lv / 10) - 11;
+            const n = lv % 10;
+            return 5*r*r - 4*r - 30 + r*n;
+        }
+        
+        
+        
+        // input-itemの手動並び替え
+        function onItemDragStart(event){
+            if (event.button !== 0) return; // 左ボタンのみ受け付け
+            if (draggingItem) return;
+            
+            document.querySelectorAll('.input-item-container.dragging').forEach( e => {
+                e.classList.remove('dragging');
+            });
+            document.querySelectorAll('.input-panel.active .input-item-container').forEach( e => {
+                if (e.contains(event.target)){
+                    draggingItem = e;
+                    e.classList.add('dragging');
+                } else {
+                    if (window.PointerEvent){
+                        e.onpointerover = onItemDragOver;
+                    } else {
+                        e.onmouseover = onItemDragOver;
+                    }
+                }
+            });
+            if (draggingItem){
+                document.body.style.userSelect = 'none';
+            }
+        }
+        function onItemDragOver(event){
+            if (!draggingItem) return;
+            const elem1 = draggingItem;
+            const elem2 = this;
+            if (elem1.dataset.type !== elem2.dataset.type) return;
+            const statType = elem1.dataset.type;
+            const inputs = preset.stats[statType].inputs;
+            idx1 = preset.stats[statType].inputs.findIndex(e => e.id == elem1.dataset.id);
+            idx2 = preset.stats[statType].inputs.findIndex(e => e.id == elem2.dataset.id);
+            const parent = elem1.parentElement;
+            if (idx1 < idx2){
+                // elem1をelem2の後ろに移動
+                parent.insertBefore(elem1, elem2.nextElementSibling);
+                inputs.splice(idx2, 0, ...inputs.splice(idx1, 1)); // splice(idx1,1)で添字がずれる
+            } else {
+                // elem1をelem2の前に移動
+                parent.insertBefore(elem1, elem2);
+                inputs.splice(idx2, 0, ...inputs.splice(idx1, 1));
+            }
+        }
+        function onItemDragEnd(event){
+            if (!draggingItem) return;
+            document.body.style.userSelect = '';
+            document.querySelectorAll('.input-panel .input-item-container').forEach( e => {
+                if (window.PointerEvent){
+                    e.onpointerover = null;
+                } else {
+                    e.onmouseover = null;
+                }
+            });
+            draggingItem.classList.remove('dragging');
+            draggingItem = null;
+        }
+        
+        
+    </script>
+</body>
+</html>
