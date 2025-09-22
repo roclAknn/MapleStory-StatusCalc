@@ -228,16 +228,15 @@ body.dragging {
     min-width: 10rem;
     cursor: pointer;
 }
-
+#hamberger-dropdown-menu a{
+    text-decoration: none; /* 下線やデフォルト装飾を消す */
+    color: inherit;
+}
 .hamberger-item {
    text-align: right;
     padding: 0.75rem;
     white-space: nowrap;
     border-bottom: 1px solid #e5e7eb;
-}
-
-.hamberger-item:last-child {
-    border-bottom: none;
 }
 
 .hamberger-item:hover {

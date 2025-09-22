@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="google-site-verification" content="vkAHjrHWlxI9ch267E96FHR8p9ajVqys8hCnFSBES8A" />
     <title>/MapleStory/ ステータス効率計算器</title>
     <link rel="stylesheet" type="text/css" href="main.css" />
 </head>
@@ -31,9 +32,36 @@
                                 ハイパーステータス
                             </div>
                         </div>
+                        <script>
+                            {
+                                const list = [
+                                    {text: 'キューブの確率計算器', href: 'https://roclaknn.github.io/EV-Cube-Calculator/'},
+                                    {text: '転生の炎の確率計算器', href: 'https://roclaknn.github.io/EV-RebirthFlame/'},
+                                    {text: 'GitHub(使い方)', href: 'https://github.com/roclAknn/MapleStory-StatusCalc'}
+                                ];
+                                const menu = document.getElementById('hamberger-dropdown-menu');
+                                const container = document.createElement('div');
+                                list.forEach( e => {
+                                    container.innerHTML = `
+                                        <a href='${e.href}' target='_blank'>
+                                            <div class="hamberger-item">${e.text}
+                                                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                     <path d="M5 4 H3 A1 1 0 0 1 2 5 V15 A1 1 0 0 1 3 16 H13 A1 1 0 0 1 14 15 V13"
+                                                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                                     <path d="M9 2 H16 V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                                     <path d="M8 10 L16 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                                </svg>
+                                            </div>
+                                        </a>
+                                    `;
+                                    menu.appendChild(container.firstElementChild);
+                                });
+                                const items = menu.querySelectorAll('.hamberger-item');
+                                items[items.length-1].style.borderBottom = 'none';
+                            }
+                        </script>
                     </div>
                 </div>
-                
                 <div id="joblist-container">
                     <div id="joblist-text">職業タイプ選択</div>
                     <select id="joblist-select" onchange="changeJob(this.selectedIndex);"></select>
