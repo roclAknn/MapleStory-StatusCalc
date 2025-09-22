@@ -21,6 +21,7 @@ body.dragging {
     display: flex;
     flex-direction: column;
     align-items: center;
+    width: 95%;
 }
 
 .title {
@@ -36,7 +37,7 @@ body.dragging {
 
 #top-container {
     max-width: 400px;
-    width: 100vw;
+    width: 100%;
     border-radius: 15px;
     margin-bottom: 15px;
 }
@@ -247,17 +248,25 @@ body.dragging {
 
 @media (min-width: 870px) {
     #status-container {
-        display: flex;
-        flex-direction: row;
+        flex-direction: row !important;
+        align-items: unset !important;
+        justify-content: center;
     }
     #status-container>.status-order:not(:last-of-type) {
         margin-right: 25px;
     }
 }
 
+#status-container {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    width: 100%;
+}
+
 .status-order {
     max-width: 400px;
-    width: 100vw;
+    width: 100%;
 }
 
 .status-pane {
@@ -314,8 +323,8 @@ body.dragging {
     flex: 1;
 }
 
-.efficiency-per {
-    width: 80px;
+.efficiency-per.input-value {
+    width: 70px;
     height: 30px
 }
 

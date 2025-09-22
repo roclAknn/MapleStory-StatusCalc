@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=0.9">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>/MapleStory/ ステータス効率計算器</title>
     <link rel="stylesheet" type="text/css" href="main.css" />
 </head>
@@ -757,7 +757,7 @@
                 document.getElementById(statType + 'Total').textContent = Math.round(total*10000)/10000 + sumtxt;
                 
                 const efficiencyEl = document.getElementById(statType + 'Efficiency');
-                efficiencyEl.textContent = `${efficiency > 0 ? '+' : ''}${( efficiency*100 ).toFixed(6)}%`;
+                efficiencyEl.textContent = `${efficiency > 0 ? '+' : ''}${( efficiency*100 ).toFixed(5)}%`;
                 
                 // 効率性の色分け
                 efficiencyEl.className = 'efficiency-rate';
