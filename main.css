@@ -13,7 +13,7 @@ body {
 }
 
 body.dragging {
-    touch-action: none;
+    overflow: hidden;
 }
 
 .container {
