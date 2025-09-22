@@ -10,6 +10,7 @@ body {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
     padding: 20px 10px;
+    width: 100vw;
 }
 
 body.dragging {
@@ -518,7 +519,9 @@ body.dragging {
     animation: modalSlideIn 0.3s ease-out;
 }
 .modal.open {
-    display: unset;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 .modal h2 {
     color: #333;
@@ -602,13 +605,13 @@ body.dragging {
     color: #374151;
     font-size: 14px;
     white-space: nowrap;
-    width: 60px;
-    padding: 12px 10px;
+    padding: 10px 0px;
+    margin-right: 6px !important;
     text-align: right;
 }
 
 .hyper-input {
-    padding: 12px 10px;
+    padding: 10px;
     border: 2px solid #e5e7eb;
     border-radius: 8px;
     font-size: 14px;
@@ -618,7 +621,6 @@ body.dragging {
 }
 
 .hyper-button {
-    flex: 1;
     background: linear-gradient(135deg, #10b981 0%, #059669 100%);
     color: white;
     border: none;
@@ -629,6 +631,8 @@ body.dragging {
     font-size: 14px;
     transition: all 0.2s;
     white-space: nowrap;
+    margin-left: 6px;
+    width: 100px;
 }
 
 .hyper-button:hover {
