@@ -421,7 +421,7 @@
                 } else {
                     // PointerEvent非対応向け代替(touch系は非対応)
                     handle.onmousedown = onItemDragStart;
-                    document.onmouseup = onItemDragEnd.call(this, event);
+                    document.onmouseup = onItemDragEnd;
                 }
                 
                 const div = document.createElement('div');
@@ -1387,7 +1387,7 @@
                     draggingItem = e;
                     e.classList.add('dragging');
                 } else {
-                    if (window.PointerEvent){
+                    if ( window.PointerEvent){
                         e.onpointerover = onItemDragOver;
                     } else {
                         e.onmouseover = onItemDragOver;
