@@ -1396,6 +1396,7 @@
             });
             if (draggingItem){
                 document.body.style.userSelect = 'none';
+                document.body.classList.add('dragging');
             }
         }
         function onItemDragOver(event){
@@ -1421,6 +1422,7 @@
         function onItemDragEnd(event){
             if (!draggingItem) return;
             document.body.style.userSelect = '';
+            document.body.classList.remove('dragging');
             document.querySelectorAll('.input-panel .input-item-container').forEach( e => {
                 if (window.PointerEvent){
                     e.onpointerover = null;
