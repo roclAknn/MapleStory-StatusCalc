@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>/MapleStory/ ステータス効率計算器</title>
     <link rel="stylesheet" type="text/css" href="main.css" />
 </head>
@@ -227,7 +227,7 @@
         
         // ページを閉じたときにLocalStorage保存のディレイ中なら保存する
         window.addEventListener('beforeunload', () => {
-            if ( 0 < storeTimer ) {
+            if ( 0 <= storeTimer ) {
                 clearTimeout(storeTimer);
                 saveLocalStorage();
             }
@@ -415,14 +415,8 @@
                 
                 const handle =  document.createElement('div');
                 handle.className = 'input-item-handle';
-                if (window.PointerEvent){
-                    handle.onpointerdown = onItemDragStart;
-                    document.onpointerup = onItemDragEnd;
-                } else {
-                    // PointerEvent非対応向け代替(touch系は非対応)
-                    handle.onmousedown = onItemDragStart;
-                    document.onmouseup = onItemDragEnd;
-                }
+                handle.onpointerdown = onItemDragStart;
+                document.onpointerup = onItemDragEnd;
                 
                 const div = document.createElement('div');
                 div.className = 'input-item';
@@ -1386,11 +1380,12 @@
                 if (e.contains(event.target)){
                     draggingItem = e;
                     e.classList.add('dragging');
+                    if (event.pointerType === 'touch'){
+                        document.onpointermove = onItemDragOver;
+                    }
                 } else {
-                    if ( window.PointerEvent){
+                    if (event.pointerType !== 'touch'){
                         e.onpointerover = onItemDragOver;
-                    } else {
-                        e.onmouseover = onItemDragOver;
                     }
                 }
             });
@@ -1402,7 +1397,19 @@
         function onItemDragOver(event){
             if (!draggingItem) return;
             const elem1 = draggingItem;
-            const elem2 = this;
+            let elem2 = null;
+            if (event.pointerType === 'touch'){
+                const target = document.elementFromPoint(event.clientX, event.clientY);
+                const list = document.querySelectorAll('.input-panel.active .input-item-container');
+                for (let e of list){
+                    if (e.contains(target)){
+                        elem2 = e; break;
+                    }
+                };
+                if (!elem2) return;
+            } else {
+                elem2 = this;
+            }
             if (elem1.dataset.type !== elem2.dataset.type) return;
             const statType = elem1.dataset.type;
             const inputs = preset.stats[statType].inputs;
@@ -1424,12 +1431,9 @@
             document.body.style.userSelect = '';
             document.body.classList.remove('dragging');
             document.querySelectorAll('.input-panel .input-item-container').forEach( e => {
-                if (window.PointerEvent){
-                    e.onpointerover = null;
-                } else {
-                    e.onmouseover = null;
-                }
+                e.onpointerover = null;
             });
+            document.onpointermove = null;
             draggingItem.classList.remove('dragging');
             draggingItem = null;
         }

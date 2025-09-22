@@ -13,7 +13,6 @@ body {
 }
 
 body.dragging {
-    overflow: hidden;
 }
 
 .container {
@@ -35,7 +34,8 @@ body.dragging {
 /*---------------------------------------------------------------------*/
 
 #top-container {
-    width: 400px;
+    max-width: 400px;
+    width: 100vw;
     border-radius: 15px;
     margin-bottom: 15px;
 }
@@ -255,7 +255,8 @@ body.dragging {
 }
 
 .status-order {
-    width: 400px;
+    max-width: 400px;
+    width: 100vw;
 }
 
 .status-pane {
@@ -407,6 +408,7 @@ body.dragging {
     justify-content: center;
     cursor: grab;
     position: relative;
+    touch-action: none;
 }
 
 .input-item-handle::before {
