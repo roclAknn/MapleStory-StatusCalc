@@ -454,7 +454,7 @@
                         onchange="updateInputEnabled('${statType}', ${input.id}, this.checked)">
                     <div class="input-name-container">
                         <input type="text" class="input-name" value="${input.name}" placeholder="項目名を入力"  maxlength=30
-                            onchange="updateInputName('${statType}', ${input.id}, this.value)">
+                            onchange="updateInputName('${statType}', ${input.id}, this.value)" oninput="this.onchange();">
                     </div>
                     <input type="number" class="input-value" value="${input.value}" step="any" maxlength=30
                         onchange="updateInputValue('${statType}', ${input.id}, this.value)" oninput="this.onchange();">
@@ -617,19 +617,24 @@
                 const presetButton = document.getElementById('preset-dropdown-button');
                 presetButton.textContent = name;
             }
+            // LocalStorage保存のために呼ぶ
+            updateDisplay();
         }
 
-        function selectPreset(num) {
+        function selectPreset(num=0) {
             if (num < 0 || data.presetNames.length <= num) num = 0;
             const presetMenu = document.getElementById('preset-dropdown-menu');
             const presetButton = document.getElementById('preset-dropdown-button');
             
-            // 前の選択を解除
-            presetMenu.querySelectorAll('.preset-item.selected').forEach( item => {
-                item.classList.remove('selected');
-                const btn = item.firstElementChild;
-                btn.classList.remove('selected');
-                btn.textContent = '';
+            
+            [...presetMenu.children].forEach( (item, idx) => {
+                const isSelected = idx == num;
+                const btn = item.querySelector('.preset-button');
+                const name = item.querySelector('.preset-input');
+                item.classList[ isSelected ? 'add' : 'remove' ]('selected');
+                btn.classList[ isSelected ? 'add' : 'remove' ]('selected');
+                btn.textContent = isSelected ? "\u2713" : "";
+                name.value = data.presetNames[idx];
             });
 
             // 新しい選択を適用
@@ -638,13 +643,8 @@
             if (!preset){
                 preset = data.presets[num] = createDefaultPreset();
             }
-            const selectedItem = presetMenu.children[num];
-            const selectedButton = selectedItem.children[0];
 
-            selectedItem.classList.add('selected');
-            selectedButton.classList.add('selected');
-            selectedButton.textContent = "\u2713";
-
+            
             // メインボタンのテキストを更新
             presetButton.textContent = data.presetNames[num];
 
@@ -752,6 +752,8 @@
             if (input) {
                 input.name = name;
             }
+            // LocalStorage保存のために呼ぶ
+            updateDisplay();
         }
 
         function updateInputValue(statType, inputId, value) {
@@ -826,6 +828,11 @@
             if ( statType.slice(0, 6) === 'status' ){
                 const allper = getStatusSum("allstatusper");
                  return ~~(base * (1 + (per + allper) / 100)) + fix;
+            }
+            if (preset.selectedJob === 'kanna' && statType === 'attack'){
+                let hp = Math.min( calcStatusFinal('HP'), 140000 );
+                let maf = ~~(hp/700);
+                return ~~( (base - maf) * (1 + per / 100)) + fix + maf;
             }
             return ~~(base * (1 + per / 100)) + fix;
         }
@@ -1439,7 +1446,9 @@
             } else {
                 elem2 = this;
             }
+            if (elem1 === elem2) return;
             if (elem1.dataset.type !== elem2.dataset.type) return;
+            
             const statType = elem1.dataset.type;
             const inputs = preset.stats[statType].inputs;
             idx1 = preset.stats[statType].inputs.findIndex(e => e.id == elem1.dataset.id);
@@ -1454,6 +1463,8 @@
                 parent.insertBefore(elem1, elem2);
                 inputs.splice(idx2, 0, ...inputs.splice(idx1, 1));
             }
+            // LocalStorage保存のために呼ぶ
+            updateDisplay();
         }
         function onItemDragEnd(event){
             if (!draggingItem) return;
@@ -1470,4 +1481,5 @@
         
     </script>
 </body>
+
 </html>
