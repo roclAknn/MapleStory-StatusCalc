@@ -7,6 +7,7 @@ GitHub Pages → https://roclaknn.github.io/MapleStory-StatusCalc/
 ## 概要
 ステータスを入力し、適切なハイパーステータスや転生値などを調査するための支援ツールです  
 シートを扱うのが面倒・計算式がわからない人向け  
+対応バージョン JMS ver.436
 
 ---
 
