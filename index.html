@@ -16,7 +16,7 @@
             <div id="basic-setting">
                 <div id="basic-setting-header">
                     <div class="dropdown-container" id="preset-dropdown-container">
-                        <button class="dropdown-button" id="preset-dropdown-button" onclick="onDropdownButtonClick.apply(this)">プリセットA</button>
+                        <button class="dropdown-button" id="preset-dropdown-button" onclick="onDropdownButtonClick.apply(this)">キャラクターA</button>
                         <div class="dropdown-menu" id="preset-dropdown-menu"></div>
                     </div>
                     
@@ -284,7 +284,7 @@
         
         function resetData() {
             const temp = {
-                presetNames: ["プリセットA", "プリセットB", "プリセットC", "プリセットD"],
+                presetNames: ["キャラクターA", "キャラクターB", "キャラクターC", "キャラクターD"],
                 selectedPreset: 0,
                 presets: []
             };
@@ -307,19 +307,7 @@
         function initializeUI(){
             resetData();
             
-            // プリセットUIの生成
-            const presetMenu = document.getElementById('preset-dropdown-menu');
-            presetMenu.innerHTML = '';
-            data.presetNames.forEach( (name, i) => {
-                let strSelected = i == data.selectedPreset ? 'selected' : '';
-                presetMenu.innerHTML += `
-                    <div class="preset-item ${strSelected}" id="preset-item${i}">
-                        <button class="preset-button ${strSelected}" onclick="selectPreset(${i})">${strSelected ? '&#x2713' : ''}</button>
-                        <input type="text" class="preset-input" value="${name}" maxlength=30
-                            onchange="updatePresetName(${i}, this.value)" oninput="this.onchange()">
-                    </div>
-                `;
-            } );
+            initializePresetUI();
             
             // 職業タイプ選択の生成
             const jobselect = document.getElementById('joblist-select');
@@ -333,6 +321,22 @@
             
             // プリセットの反映
             selectPreset(data.selectedPreset);
+        }
+        
+        function initializePresetUI(){
+            // プリセットUIの生成
+            const presetMenu = document.getElementById('preset-dropdown-menu');
+            presetMenu.innerHTML = '';
+            data.presetNames.forEach( (name, i) => {
+                let strSelected = i == data.selectedPreset ? 'selected' : '';
+                presetMenu.innerHTML += `
+                    <div class="preset-item ${strSelected}" id="preset-item${i}">
+                        <button class="preset-button ${strSelected}" onclick="selectPreset(${i})">${strSelected ? '&#x2713' : ''}</button>
+                        <input type="text" class="preset-input" value="${name}" maxlength=30
+                            onchange="updatePresetName(${i}, this.value)" oninput="this.onchange()">
+                    </div>
+                `;
+            } );
         }
         
         function loadSelectedPreset(){
@@ -627,16 +631,6 @@
             const presetMenu = document.getElementById('preset-dropdown-menu');
             const presetButton = document.getElementById('preset-dropdown-button');
             
-            
-            [...presetMenu.children].forEach( (item, idx) => {
-                const isSelected = idx == num;
-                const btn = item.querySelector('.preset-button');
-                const name = item.querySelector('.preset-input');
-                item.classList[ isSelected ? 'add' : 'remove' ]('selected');
-                btn.classList[ isSelected ? 'add' : 'remove' ]('selected');
-                btn.textContent = isSelected ? "\u2713" : "";
-                name.value = data.presetNames[idx];
-            });
 
             // 新しい選択を適用
             data.selectedPreset = num;
@@ -644,6 +638,9 @@
             if (!preset){
                 preset = data.presets[num] = createDefaultPreset();
             }
+            
+            // プリセットの再生成
+            initializePresetUI();
 
             
             // メインボタンのテキストを更新
