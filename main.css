@@ -229,7 +229,7 @@ body.dragging {
     cursor: pointer;
 }
 #hamberger-dropdown-menu a{
-    text-decoration: none; /* 下線やデフォルト装飾を消す */
+    text-decoration: none; /* ??????f?t?H???g?????????? */
     color: inherit;
 }
 .hamberger-item {
@@ -653,26 +653,41 @@ body.dragging {
     border-radius: 8px;
 }
 
-#hyper-result-container>table {
+#hyper-result-table {
     overflow: hidden;
     border-spacing: 0;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
     overflow: hidden;
     background: white;
+    font-size: 13px;
 }
 
-#hyper-result-container>table tr:nth-child(2n+3) {
+#hyper-result-table tr:nth-child(2n+3) {
     background: #eeeefa;
 }
 
-#hyper-result-container>table td {
+#hyper-result-table td {
+    height: 36px;
     padding: 4px 12px;
     text-align: right;
 }
 
 .hyper-result-remain {
     background: #dde;
+}
+
+.hyper-result-inputtd{
+  padding: 0px 4px !important;
+  text-align: center !important;
+}
+
+.hyper-result-input{
+  width: 90%;
+  text-align: right;
+  padding: 4px;
+  border: 1px solid #eee;
+  border-radius: 4px;
 }
 
 /*---------------------------------------------------------------------*/
@@ -708,6 +723,5 @@ body.dragging {
 .efficiency-compare tr:nth-of-type(2n-1){background: #88a;}
 
 /*---------------------------------------------------------------------*/
-
 
 

@@ -109,8 +109,8 @@
         </div>
         <div class="modal" id="hyper-modal" onclick="event.stopPropagation()">
             <h2>ハイパーステータス最適化</h2>
-            <p style="color: #666; margin-bottom: 25px;">
-                ハイパーステータス上昇分のステータスを<br>0・無効・減算してから使用してください
+            <p style="color: #666; margin-bottom: 20px;">
+                出力A：リセットして振り直し<br>出力B：リセットせずに振る
             </p>
             <div id="hyper-calcpoint-container" class="hyper-container">
                 <div class="hyper-label">レベル</div>
@@ -120,13 +120,11 @@
                 <input type="number" class="hyper-input" id="hyper-decrease" value="0"
                             onchange="updateCalcHyperPoint()" oninput="this.onchange()">
             </div>
-            <div id="hyper-decrease-container" class="hyper-container">
-            </div>
             <div id="hyper-point-container" class="hyper-container">
                 <div class="hyper-label">所持pt</div>
                 <input type="number" class="hyper-input" id="hyper-point" value="0"
                             onchange="updateHyperPoint(this.value)" oninput="this.onchange()">
-                <button id="hyper-calc-button" class="hyper-button" onclick="outputHyperList()">出力</button>
+                <button id="hyper-calc-button" class="hyper-button" onclick="onHyperOutputButton()">出力</button>
             </div>
             <div id="hyper-result-container">
             </div>
@@ -215,7 +213,7 @@
         let draggingItem = null; 
         
         // ハイパーステータス計算用
-        let hyperpoint = 100;
+        let hyperpoint = 0;
         let hyperAccuracy = 5;
         let instanceHyper = {};
         const requireHyperPointNext = [1, 2, 4, 8, 10, 15, 20, 25, 30, 35, 50, 65, 80, 95, 110];
@@ -837,18 +835,20 @@
 
         function getStatusSum(statType) {
             const stats = preset.stats;
+            const hyper = instanceHyper[statType]||[];
             if (!stats[statType]) return 0;
             let ret = stats[statType].inputs
                        .filter(input => input.enabled)
                        .reduce((sum, input) => sum + input.value, 0);
-            ret += instanceHyper[statType] || 0;
+            hyper.forEach(val => ret += val);
             return ret;
         }
         function getIgnoreDef(){
             const inputs = preset.stats['ignoredef'].inputs;
+            const hyper = instanceHyper['ignoredef']||[];
+            const arr = [...inputs.filter(e=>e.enabled).map(e=>e.value), ...hyper];
             let ret = 1;
-            inputs.filter(input => input.enabled).forEach( input => {
-                let val = input.value
+            arr.forEach( val => {
                 if (val > 0){
                     ret *= 1 - Math.min(100, val)/100;
                 } else {
@@ -856,15 +856,6 @@
                     ret /= 1 - Math.min(100, -val)/100;
                 }
             });
-            let val = instanceHyper['ignoredef'];
-            if (val !== undefined){
-                if (val > 0){
-                    ret *= 1 - Math.min(100, val)/100;
-                } else {
-                    if (100 <= -val) return;
-                    ret /= 1 - Math.min(100, -val)/100;
-                }
-            }
             return 1 - ret;
         }
         
@@ -1123,13 +1114,16 @@
         }
         
         function openHyperModal(){
+            hyperpoint = 0;
+            
+            // 結果表示の初期化
+            outputHyperList({},{});
+            
             // ポイントの初期化
             const input = document.getElementById('hyper-point');
             if (+input.value <= 0) updateCalcHyperPoint();
             else updateHyperPoint(input.value);
-            // 結果表示の初期化
-            const container = document.getElementById('hyper-result-container');
-            container.innerHTML = '';
+            
             // モダルを開く
             const modal = document.getElementById('hyper-modal');
             modal.classList.add('open');
@@ -1145,36 +1139,91 @@
         }
         function updateHyperPoint(val){
             hyperpoint = +val;
+            updateHyperInputRemain();
         }
-        function outputHyperList(){
+        function updateHyperInputRemain(){
+            const tableinputs = document.getElementsByClassName("hyper-result-input");
+            const remaintd = document.getElementById("hyper-result-inputremain");
+            let sumpt = 0;
+            [...tableinputs].forEach( e =>{
+                sumpt += requireHyperPointSum[+e.value];
+            });
+            remaintd.innerHTML = `${hyperpoint - sumpt}pt`;
+        }
+        function onHyperOutputButton(){
+            const tableinputs = document.getElementsByClassName("hyper-result-input");
+            const listC = Object.fromEntries(
+                [...tableinputs].map(f => [f.dataset.hypername, +f.value])
+            );
+            const listA = getHyperList(listC, true);
+            const listB = getHyperList(listC, false);
+            outputHyperList(listA, listB);
+        }
+        function outputHyperList(listA = {}, listB = {}){
             const container = document.getElementById('hyper-result-container');
-            container.innerHTML = '';
             const table = document.createElement('table');
             table.id = 'hyper-result-table';
-            const list = getHyperList();
-            let inner = '';
-            let sumpt = 0;
+            
+            // 対象となるステータスインデックスのリストを生成
+            const indexNames = [];
+            // 並びはhyperGrowthに従う
             Object.keys( hyperGrowth ).forEach( indexname => {
-                if ( !list.hasOwnProperty(indexname) ) return;
+                if ( statusList[preset.selectedJob].some( item => item.indexname == indexname) ){
+                    indexNames.push( indexname );
+                }
+            } );
+            
+            const tableinputs = document.getElementsByClassName("hyper-result-input");
+            const listC = Object.fromEntries(
+                [...tableinputs].map(f => [f.dataset.hypername, +f.value])
+            );
+            
+            let inner = '';
+            let sumpt = [0, 0, 0];
+            indexNames.forEach( indexname => {
                 const name = statusList[preset.selectedJob].find( item => item.indexname == indexname ).name;
-                const lv = list[indexname];
+                const lvlist = [listC[indexname]||0, listA[indexname]||0, listB[indexname]||0];
                 inner += `<tr class="hyper-result-tr">
                               <td class="hyper-result-name">${name}</td>
-                              <td class="hyper-result-lv">${lv}</td>
+                              <td class="hyper-result-lv hyper-result-inputtd">
+                                  <input class="hyper-result-input" data-hypername=${indexname}
+                                      onchange="updateHyperInputRemain();" oninput="this.onchange();"
+                                      type="number" min="0" max="15" value="${lvlist[0]}">
+                              </td>
+                              <td class="hyper-result-lv">${lvlist[1]}</td>
+                              <td class="hyper-result-lv">${lvlist[2]}</td>
                           </tr>`;
-                sumpt += requireHyperPointSum[lv];
+                // 各リストの必要ポイントの計算
+                for(let i = 0; i < sumpt.length; i++) sumpt[i] += requireHyperPointSum[lvlist[i]];
             });
             table.innerHTML = 
-                         `<tr class="hyper-result-tr hyper-result-remain">
+                         `<tr class="hyper-result-tr hyper-result-header">
+                              <td class="hyper-result-name"></td>
+                              <td class="hyper-result-lv">初期値</td>
+                              <td class="hyper-result-lv">出力A</td>
+                              <td class="hyper-result-lv">出力B</td>
+                          </tr>
+                          <tr class="hyper-result-tr hyper-result-remain">
                               <td class="hyper-result-name">余り</td>
-                              <td class="hyper-result-lv">${hyperpoint - sumpt}pt</td>
+                              <td class="hyper-result-lv" id="hyper-result-inputremain">
+                                  ${hyperpoint - sumpt[0]}pt
+                              </td>
+                              <td class="hyper-result-lv">${hyperpoint - sumpt[1]}pt</td>
+                              <td class="hyper-result-lv">${hyperpoint - sumpt[2]}pt</td>
                           </tr>`
                           + inner;
+            container.innerHTML = '';
             container.appendChild(table);
         }
-        function getHyperList(){
+        function getHyperList(listC={}, isReset=true){
+            instanceHyper = {};
+            const resetInstanceHyper = Object.fromEntries(
+                    Object.entries(listC).map(([name, lv])=>[ name, [hyperGrowth[name][lv]*-1] ])
+                );
+            
             const igd = getIgnoreDef();
-            let igdmin = 0, igdmax = 15;
+            let igdmin = isReset ? 0 : (listC.ignoredef||0);
+            let igdmax = 15;
             if (igd >= 100){
                 igdmax = 0;
             }else{
@@ -1189,9 +1238,12 @@
                 }
             }
             
-            let hpmax = 0;
             // カンナはHP換算上限を考慮してHPperを振る
-            if (preset.selectedJob == 'kanna'){
+            let hpmax = 0;
+            if (preset.selectedJob == 'da'){
+                hpmax = 15;
+            }else if (preset.selectedJob == 'kanna'){
+                hpmax = isReset ? 0 : (listC.HPper||0);
                 let hp = getStatusSum('HP')
                 ,   hpp = getStatusSum('HPper')
                 ,   hpf = getStatusSum('HPfinal')
@@ -1205,9 +1257,14 @@
             // 対象となるステータスのリストを生成
             const targetList = {};
             const targetEffs = [];
+            instanceHyper = {...resetInstanceHyper};
             statusList[preset.selectedJob].forEach( e => {
                 if ( !hyperGrowth.hasOwnProperty(e.indexname) ) return;
-                const eff = calculateEfficiency(e.indexname, hyperGrowth[1]);
+                
+                const minlv = (e.indexname == 'ignoredef') ? igdmin : (
+                    isReset ? 0 : (listC[e.indexname]||0) );
+                const eff = minlv >= 15 ? 0 : calculateEfficiency(e.indexname, hyperGrowth[e.indexname][minlv+1]);
+                
                 
                 // 防御率無視は強制的に入れる
                 if ( e.indexname == 'ignoredef' ){
@@ -1218,13 +1275,14 @@
                 // 効率が0なら除外
                 if ( eff <= 0 ) return;
                 if ( e.indexname == 'HPper' ){
-                    targetList[e.indexname] = {eff: eff, min: 0, max: hpmax};
-                    targetEffs.push({name: e.indexname, eff: 0, lv: 0});
-                    return;
+                    targetList[e.indexname] = {eff: eff, min: minlv, max: hpmax};
+                    targetEffs.push({name: e.indexname, eff: 0, lv: minlv});
+                } else {
+                    targetList[e.indexname] = {eff: eff, min: minlv, max: 15};
+                    targetEffs.push({name: e.indexname, eff: 0, lv: minlv});
                 }
-                targetList[e.indexname] = {eff: eff, min:0, max: 15};
-                targetEffs.push({name: e.indexname, eff: 0, lv: 0});
             });
+            instanceHyper = {};
             
             // 順位付けなどに使う
             const targets = Object.keys(targetList);
@@ -1238,15 +1296,27 @@
             
             // 貪欲法である程度振った初期値を作る
             // hyperAccuracy=1～10(遅い・高精度) 5あたりでもほぼ最適値）
-            instanceHyper = {};
+            instanceHyper = {...resetInstanceHyper};
             let temppoint = 0;
             let maxlv = 1;
+            
             // 初期値のセット
+            let defaultlist = document.getElementsByClassName("hyper-result-input");
+            defaultlist = [...defaultlist].map(e=>e.dataset.hypername);
             targetEffs.forEach((elem, idx) => {
-                instanceHyper[elem.name] = hyperGrowth[elem.name][elem.lv];
+                if(!instanceHyper[elem.name]) instanceHyper[elem.name] = [];
+                instanceHyper[elem.name].push( hyperGrowth[elem.name][elem.lv] );
                 temppoint += requireHyperPointSum[elem.lv];
                 if (maxlv < elem.lv) maxlv = elem.lv;
+                defaultlist = defaultlist.filter(e=>e!==elem.name);
             });
+            // 考慮されない要素のポイントを加算
+            if (!isReset){
+                defaultlist.forEach(indexname=>{
+                    temppoint += requireHyperPointSum[listC[indexname]||0];
+                });
+            }
+            
             while ( requireHyperPointNext[Math.min(14, maxlv)] * hyperAccuracy < hyperpoint - temppoint){
                 // 効率再計算
                 targetEffs.forEach((elem, idx) => {
@@ -1275,7 +1345,9 @@
                 temppoint += requireHyperPointNext[target.lv];
                 if (maxlv < ++target.lv) maxlv = target.lv;
                 if (15 <= target.lv) target.eff = 0;
-                instanceHyper[ target.name ] = hyperGrowth[ target.name ][ target.lv ];
+                instanceHyper[ target.name ] = [
+                        ...(resetInstanceHyper[ target.name ]||[]), hyperGrowth[ target.name ][ target.lv ]
+                    ];
             }
             instanceHyper = {};
             
@@ -1334,7 +1406,7 @@
                         temp2.point = map.point - reqpt;
                         temp2.minlv = Math.min(i, map.minlv);
                         temp2.instance = {...map.instance};
-                        temp2.instance[type] = hyperGrowth[type][i];
+                        temp2.instance[type] = [ ...(resetInstanceHyper[type]||[]), hyperGrowth[type][i] ];
                         temp.push(temp2);
                     }
                 });
@@ -1342,7 +1414,7 @@
             });
             
             // 総当たりリストから最効率のものを抜き出す
-            instanceHyper = {};
+            instanceHyper = {...resetInstanceHyper};
             const baseEff = calculateEfficiency('val', 1);
             const baseIgd = 1 - preset.enemyDef * (1 - getIgnoreDef()) / 100;
             let isLackIgd = (baseIgd <= 0);
@@ -1352,11 +1424,6 @@
             const igdIdx = targets.indexOf('ignoredef');
             mappingList.forEach( (map, midx) => {
                 instanceHyper = map.instance;
-                /*
-                targets.forEach( (name, tidx) =>{
-                    instanceHyper[name] = hyperGrowth[name][map[tidx]];
-                });
-                */
                 let result = calculateEfficiency('val', 1);
                 let def = 1 - preset.enemyDef * (1 - getIgnoreDef()) / 100;
                 if ( 0 < def ){
@@ -1391,6 +1458,10 @@
             targets.forEach( (name, idx) => {
                 ret[name] = mappingList[bestEffIdx][idx];
             });
+            // 0効率ので計算されない要素の初期値を結果として挿入
+            defaultlist.forEach(indexname=>{
+                ret[indexname] = listC[indexname]||0;
+            });
             return ret;
         }
         function getHyperPointByLv(lv){
@@ -1399,7 +1470,6 @@
             const n = lv % 10;
             return 5*r*r - 4*r - 30 + r*n;
         }
-        
         
         
         // input-itemの手動並び替え
