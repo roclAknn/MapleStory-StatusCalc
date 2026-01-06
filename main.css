@@ -150,6 +150,7 @@ body.dragging {
     align-items: center;
     padding: 0.75rem;
     border-bottom: 1px solid #e5e7eb;
+    gap: 0.2rem;
 }
 
 .preset-item:last-child {
@@ -167,23 +168,40 @@ body.dragging {
 .preset-button {
     width: 2rem;
     height: 2rem;
-    border-radius: 50%;
-    border: 2px solid #d1d5db;
-    background: white;
+    background: transparent;
     cursor: pointer;
-    margin-right: 0.75rem;
     transition: all 0.2s;
     font-size: 0.75rem;
+    border:2px solid transparent;
+    border-radius: 15%;
+}
+.preset-button:last-child{
+    margin-right: 0;
 }
 
 .preset-button:hover {
     border-color: #60a5fa;
 }
 
-.preset-button.selected {
+.preset-select {
+    border-radius: 50%;
+    border: 2px solid #d1d5db;
+    margin-right: 0.4rem;
+}
+.preset-select.selected {
     background-color: #3b82f6;
     border-color: #3b82f6;
     color: white;
+}
+
+.preset-copy>.icon {
+    width: 60%;
+    height: auto;
+}
+
+.preset-remove>.icon {
+    width: 80%;
+    height: auto;
 }
 
 .preset-input {
@@ -202,6 +220,12 @@ body.dragging {
 .preset-input.selected {
     background-color: #eff6ff;
     border-color: #93c5fd;
+}
+
+.preset-additem {
+  justify-content: center;
+  padding: 0.4rem;
+  cursor: pointer;
 }
 
 /*---------------------------------------------------------------------*/
@@ -488,7 +512,7 @@ body.dragging {
     color: white;
     border: none;
     border-radius: 10px;
-    height: 55px;
+    height: 40px;
     width: 100%;
     font-size: 16px;
     cursor: pointer;

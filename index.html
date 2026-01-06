@@ -16,7 +16,7 @@
             <div id="basic-setting">
                 <div id="basic-setting-header">
                     <div class="dropdown-container" id="preset-dropdown-container">
-                        <button class="dropdown-button" id="preset-dropdown-button" onclick="onDropdownButtonClick.apply(this)">キャラクターA</button>
+                        <button class="dropdown-button" id="preset-dropdown-button" onclick="onDropdownButtonClick.apply(this)">キャラクター1</button>
                         <div class="dropdown-menu" id="preset-dropdown-menu"></div>
                     </div>
                     
@@ -263,9 +263,10 @@
         
         // 枠外クリックでドロップダウンを閉じる
         document.addEventListener('click', (e) => {
+            const path = e.composedPath();
             const containers = document.getElementsByClassName('dropdown-container');
             for ( let container of containers){
-                if (!container.contains(e.target)) {
+                if (!path.includes(container)) {
                     let dropdownMenu = container.querySelector('.dropdown-menu.open');
                     if (dropdownMenu)
                         dropdownMenu.classList.remove('open');
@@ -282,7 +283,7 @@
         
         function resetData() {
             const temp = {
-                presetNames: ["キャラクターA", "キャラクターB", "キャラクターC", "キャラクターD"],
+                presetNames: ["キャラクター1", "キャラクター2", "キャラクター3", "キャラクター4"],
                 selectedPreset: 0,
                 presets: []
             };
@@ -329,12 +330,27 @@
                 let strSelected = i == data.selectedPreset ? 'selected' : '';
                 presetMenu.innerHTML += `
                     <div class="preset-item ${strSelected}" id="preset-item${i}">
-                        <button class="preset-button ${strSelected}" onclick="selectPreset(${i})">${strSelected ? '&#x2713' : ''}</button>
+                        <button class="preset-button preset-select ${strSelected}" onclick="selectPreset(${i})">${strSelected ? '&#x2713' : ''}</button>
                         <input type="text" class="preset-input" value="${name}" maxlength=30
                             onchange="updatePresetName(${i}, this.value)" oninput="this.onchange()">
+                        <button class="preset-button preset-copy" onclick="copyPreset(${i})">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="icon">
+                                <path d="M7 7V3C7 2 7 2 8 2H21C22 2 22 2 22 3V16C22 17 22 17 21 17H17V21C17 22 17 22 16 22H3C2 22 2 22 2 21L2 8C2 7 2 7 3 7H7ZM9 7H16C17 7 17 7 17 8V15H20V4H9V7ZM4 9L4 20H15V9H4Z"></path>
+                            </svg>
+                        </button>
+                        <button class="preset-button preset-remove" onclick="removePreset(${i})">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="icon">
+                                <path d="M12 11L17 6L18 7L13 12L18 17L17 18L12 13L7 18L6 17L11 12L6 7L7 6L12 11Z"></path>
+                            </svg>
+                        </button>
                     </div>
                 `;
             } );
+            presetMenu.innerHTML += `
+                <div class="preset-item preset-additem" onclick="addPreset()">
+                    +
+                </div>
+            `;
         }
         
         function loadSelectedPreset(){
@@ -613,7 +629,10 @@
         }
         
         
-        // 選択プリセット・プリセット名変更処理
+        // プリセット変更・選択処理
+        function normalizePresetIndex(num=0) {
+            return (num < 0 || data.presetNames.length <= num) ? 0 : num;
+        }
         function updatePresetName(num, name) {
             data.presetNames[num] = name;
             if (num === data.selectedPreset){
@@ -625,11 +644,21 @@
         }
 
         function selectPreset(num=0) {
-            if (num < 0 || data.presetNames.length <= num) num = 0;
+            num = normalizePresetIndex(num);
+            const presetMenu = document.getElementById('preset-dropdown-menu');
+            
+            // プリセット選択(本体)
+            selectPresetKeepOpen(num);
+
+            // ドロップダウンを閉じる
+            presetMenu.classList.remove('open');
+        }
+        
+        function selectPresetKeepOpen(num=0){
+            num = normalizePresetIndex(num);
             const presetMenu = document.getElementById('preset-dropdown-menu');
             const presetButton = document.getElementById('preset-dropdown-button');
             
-
             // 新しい選択を適用
             data.selectedPreset = num;
             preset = data.presets[num];
@@ -639,16 +668,64 @@
             
             // プリセットの再生成
             initializePresetUI();
-
             
             // メインボタンのテキストを更新
             presetButton.textContent = data.presetNames[num];
-
-            // ドロップダウンを閉じる
-            presetMenu.classList.remove('open');
             
             // プリセット内容の反映
             loadSelectedPreset();
+        }
+        
+        function copyPreset(num=0){
+            num = normalizePresetIndex(num);
+            
+            // 確認ダイアログ
+            let name = data.presetNames[num];
+            let ret = confirm(`コピー：プリセット[${name}]を複製しますか？`);
+            if (!ret) return;
+            
+            data.presetNames.push(data.presetNames[num]);
+            data.presets.push(JSON.parse(JSON.stringify(data.presets[num])));
+            selectPresetKeepOpen(data.selectedPreset); // 選択プリセットを変更しない
+        }
+        
+        function removePreset(num=0){
+            num = normalizePresetIndex(num);
+            
+            // 確認ダイアログ
+            let name = data.presetNames[num];
+            let ret = confirm(`削除：プリセット[${name}]を削除しますか？`);
+            if (!ret) return;
+            ret = confirm(`注意：変更は取り消せません。本当に削除しますか？`);
+            if (!ret) return;
+            
+            data.presetNames.splice(num, 1);
+            data.presets.splice(num, 1);
+            
+            // プリセットが空になっていたら新規プリセットを追加・選択して終了
+            if (data.presetNames.length <= 0){
+                addPreset(false);
+                return;
+            }
+            
+            //選択中プリセット番号の調整
+            selnum = data.selectedPreset;
+            if (num < selnum) selnum--;
+            else if (num == selnum) selnum = 0;
+            
+            selectPresetKeepOpen(selnum);
+        }
+        
+        function addPreset(isConfirm=true){
+            // 確認ダイアログ
+            if (isConfirm){
+                let ret = confirm(`追加：新しいプリセットをリストに追加しますか？`);
+                if (!ret) return;
+            }
+            num = data.presetNames.length; // 追加するindex
+            data.presetNames.push("キャラクター" + (num+1)); // キャラ名はindex+1
+            //プリセットデータは自動生成される
+            selectPresetKeepOpen(num);
         }
         
         // 職業タイプ変更処理
@@ -694,6 +771,11 @@
             
             // クリックされたペインを開く
             if (!isActive) {
+                // 項目が空なら新規項目を作成
+                const statType = this.parentElement.dataset.stat;
+                if (preset.stats[statType].inputs.length <= 0){
+                    addInput(statType)
+                }
                 const panel = pane.querySelector('.input-panel');
                 panel.ontransitionend='';
                 panel.style.display = '';
@@ -1458,7 +1540,7 @@
             targets.forEach( (name, idx) => {
                 ret[name] = mappingList[bestEffIdx][idx];
             });
-            // 0効率ので計算されない要素の初期値を結果として挿入
+            // 0効率で計算されない要素の初期値を結果として挿入
             defaultlist.forEach(indexname=>{
                 ret[indexname] = listC[indexname]||0;
             });
